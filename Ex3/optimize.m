@@ -1,45 +1,75 @@
-function [ S, qProgress ] = optimize( mu, lambda, maxGen, plus, sigmaMult )
+function [ bestSolution, qualityProgress ] = optimize( mu, lambda, ...
+    sigma, maxGen, useParents, sigmaMult, stepSize )
     
-
     for i = 1:mu
-        s = init(100);
-        s = evaluate(s);
-        population{i} = s;
+        s = init();
+        s = evaluate(s, stepSize);
+        population(i) = s;
     end
     
+    bestSolution = population(1);
+    
     for gen = 1:maxGen
-        newPopulation = cell(size(population)); % pre-alloc
         nr_success = 0;
         % create new population
-        for i = 1:lambda
+        parfor j = 1:lambda
             % select random parent
-            s = mutate(parent);
+            parent = population(randi(length(population)));
+            offspring = mutate(parent, sigma);
             % evaluate
-            % s.q > p.q -> nr_success++
-            newPopulation{i} = s;
+            offspring = evaluate(offspring, stepSize);
+                        
+            if offspring.quality < parent.quality
+                nr_success = nr_success + 1;
+            end
+            
+            newPopulation(j) = offspring;
         end
         
-        if plus
+        if useParents
             % add population to newPopulation
+            for i = lambda + 1: lambda + mu
+                newPopulation(i) = population(i - lambda);
+            end
         end
-        % generational replacement
-        % A, sortrows, ...
-        population = [];
-        for j = ...
-                population{i} = newPopulation{j};
+        % generational replacement TODO
+        
+        % sort new population
+        [~, idx] = sort([newPopulation.quality]);
+        newPopulation = newPopulation(idx);
+        
+        if newPopulation(1).quality < bestSolution.quality
+            bestSolution = newPopulation(1);
+        end
+        
+        % alles speichern!
+        % Verlauf von quality, sigma, ...
+        qualityProgress(gen) = newPopulation(1).quality;
+        bestProgress(gen) = bestSolution.quality;
+        sigmaProgress(gen) = sigma;
+        
+        % setup for next generation
+        for j = 1:mu
+                population(j) = newPopulation(j);
         end
         
         % sigma control (1/5 Erfolgsregel)
         if nr_success > 0.2 * lambda
             sigma = sigma * sigmaMult;
-        elif nr_success < 0.2 * lambda
+        else
             sigma = sigma / sigmaMult;
         end
-        
-        % alles speichern!
-        % Verlauf von quality, sigma, 
     end
     
+    figure;
+    hold on;
+    gens = 1:gen;
+    plot(gens, qualityProgress, '+r');
+    plot(gens, bestProgress, '-');
+    plot(gens, sigmaProgress, ':');
+    xlabel('Generation');
+    legend('Best quality for generation', 'Best quality overall', 'sigma');
     
+    hold off;
 end
 
